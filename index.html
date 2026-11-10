@@ -56,6 +56,55 @@ function role(n){return roles[n]||'damage'}function stats(n){return traits[n]||d
 function selectOptions(id,names){let prev=$(id).value;$(id).replaceChildren(new Option('— None —',''),...names.map(n=>new Option(n,n)));$(id).value=names.includes(prev)?prev:''}
 function fillMaps(){let old=$('map').value,q=$('mapSearch').value.toLowerCase();let a=modes[$('mode').value].filter(n=>n.toLowerCase().includes(q)).sort((x,y)=>x.localeCompare(y));$('map').innerHTML=a.map(n=>'<option>'+n+'</option>').join('');if(a.includes(old))$('map').value=old;render()}
 function picks(prefix,count){return Array.from({length:count},(_,i)=>$(prefix+(i+1)).value).filter(Boolean)}
+const modeTraits={
+  // Relative estimates: [survival, elimination, carrier, control, goal, defense, safeDamage, safeDefense].
+  Rico:[1,2,0,2,1,2,2,2],Colt:[1,2,0,1,1,1,2,1],Nani:[1,2,0,1,0,2,2,1],
+  Mandy:[1,2,0,1,0,1,2,1],Tick:[2,1,0,2,0,2,1,2],Sprout:[2,1,1,2,1,2,1,2],
+  Gene:[2,1,2,2,1,2,0,1],Gale:[2,1,1,2,1,2,0,2],Max:[2,1,2,1,2,1,1,1],
+  Poco:[2,0,2,2,1,2,0,1],Jessie:[1,1,1,2,1,2,2,2],Emz:[1,1,1,2,1,2,1,2],
+  Squeak:[1,1,1,2,1,2,1,2],Dynamike:[0,2,0,2,1,1,2,2],Frank:[1,1,0,2,2,2,1,2],
+  El_Primo:[1,1,0,1,2,2,1,2],Fang:[0,2,0,1,2,1,1,1],Edgar:[0,2,0,0,1,0,2,1],
+  Kenji:[1,2,1,1,2,1,1,1],Shade:[1,2,0,1,2,1,1,1],Clancy:[1,1,0,2,1,2,2,2],
+  Griff:[1,2,0,1,1,2,2,2],Nita:[1,1,1,2,2,2,2,2],Carl:[1,1,1,1,2,1,2,1],
+  Bo:[1,1,1,2,1,2,1,2],Hank:[1,1,0,2,1,2,1,2],Draco:[1,1,0,2,2,2,1,2]
+};
+function modeFit(n,r,range,entry,frag,geo,mode,allies,enemies){
+ const t=modeTraits[n.replaceAll(' ','_')]||[frag===2?0:1,range===2?2:1,r==='support'?2:1,r==='controller'||r==='artillery'?2:1,r==='tank'||r==='assassin'?2:1,r==='controller'||r==='tank'?2:1,r==='damage'?2:0,r==='controller'?2:1];
+ const [survive,kill,carry,control,goal,defend,safeDmg,safeDef]=t;
+ const open=geo?.midOpen??1, walls=geo?.wall??1,flank=geo?.flank??1;
+ let delta=0,why=[],risk=[];
+ if(mode==='Knockout'||mode==='Bounty'){
+   delta+=survive*7+kill*5-(2-survive)*7;
+   if(range===0&&open===2){delta-=20;risk.push('Limited access to targets before elimination')}
+   if(mode==='Bounty'&&survive===0){delta-=9;risk.push('High risk of giving away stars')}
+   if(mode==='Knockout'&&entry===0&&range===0){delta-=10;risk.push('Cannot reliably start engagements')}
+   if(survive===2)why.push('Safer elimination trading');
+ }else if(mode==='Gem Grab'){
+   delta+=control*7+carry*4+survive*3;
+   if(carry===0&&control===0){delta-=12;risk.push('Limited gem control or carrier safety')}
+   if(control===2)why.push('Controls gem mine');
+   if(carry===2)why.push('Safe gem carrier or escort');
+ }else if(mode==='Brawl Ball'){
+   delta+=goal*7+defend*5+control*3;
+   if(goal===0&&defend===0){delta-=14;risk.push('Little scoring or goal defense')}
+   if(goal===2)why.push('Creates scoring opportunities');
+   if(defend===2)why.push('Protects own goal');
+   if(walls===2&&r==='marksman')delta-=5;
+ }else if(mode==='Hot Zone'){
+   delta+=control*9+survive*5+defend*3;
+   if(control===0){delta-=16;risk.push('Poor sustained zone control')}
+   if(control===2)why.push('Zone denial and presence');
+ }else if(mode==='Heist'){
+   delta+=safeDmg*11+safeDef*6;
+   if(safeDmg===0){delta-=24;risk.push('Insufficient safe damage')}
+   if(safeDmg===2)why.push('Strong safe damage');
+   if(safeDef===2)why.push('Defends against safe rushes');
+   if(range===0&&open===2&&flank===0){delta-=18;risk.push('Cannot reliably reach enemy safe')}
+ }
+ if(enemies.some(e=>['Edgar','Fang','Kenji','Shade','Mico'].includes(e))&&mode==='Gem Grab'&&carry===2&&defend===0){delta-=10;risk.push('Gem carrier vulnerable to dive')}
+ if(allies.length&&mode==='Hot Zone'&&control===0&&allies.every(a=>role(a)!=='controller'))delta-=8;
+ return {delta,why,risk};
+}
 function evaluate(n){let [range,entry,superAccess,frag]=stats(n),r=role(n),map=$('map').value,known=!!maps[map],[open,cover]=maps[map]||[1,1],allies=picks('ally',2),enemies=picks('enemy',3),unknown=3-enemies.length;let score=58,risks=[],strengths=[];
 const geo=terrainProfiles[map];
 if(geo){
@@ -76,10 +125,8 @@ if(geo){
 if(open===2){if(range===2){score+=18;strengths.push('Long-range pressure')}else if(range===0){score-=28;risks.push('Hard to reach enemies on open ground')}if(cover===0&&entry===0){score-=18;risks.push('Limited safe approach routes')}if(range===0&&superAccess===0){score-=15;risks.push('Unreliable Super access')}}
 if(open===0){if(r==='artillery'||r==='controller')score+=13;if(r==='tank')score+=9}
 if(cover===2&&r==='artillery')score+=8;
-if($('mode').value==='Knockout'){if(range===2)score+=7;if(range===0)score-=10}
-if($('mode').value==='Bounty'){if(range===2)score+=9;if(range===0)score-=8}
-if($('mode').value==='Hot Zone'&&['controller','artillery'].includes(r))score+=8;
-if($('mode').value==='Heist'&&['damage','artillery'].includes(r))score+=7;
+const objectiveFit=modeFit(n,r,range,entry,frag,geo,$('mode').value,allies,enemies);
+score+=objectiveFit.delta;strengths.push(...objectiveFit.why);risks.push(...objectiveFit.risk);
 for(let e of enemies){let er=stats(e)[0];if(er>range){score-=(er-range)*(open===2?13:7);risks.push('Outranged by '+e)}if(er<range&&open===2)score+=4;if(e==='Fang'&&r==='artillery')score-=8}
 for(let a of allies){if(role(a)===r)score-=3}
 if(allies.filter(a=>stats(a)[0]===2).length===2&&range===0&&open===2)score-=10;
