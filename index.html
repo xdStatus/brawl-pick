@@ -11,8 +11,36 @@
 const READY='Bo,Bolt,Carl,Clancy,Colt,Damian,Doug,Dynamike,Edgar,El Primo,Emz,Fang,Frank,Gale,Gene,Gigi,Glowy,Griff,Hank,Jessie,Kenji,Kit,Lumi,Mandy,Max,Mico,Mina,Mr. P,Nani,Nita,Poco,Rico,Shade,Sirius,Sprout,Squeak,Starr Nova,Tick,Wendy,Willow,Ziggy,Draco,Cosmo'.split(',');
 const modes={'Knockout':['Belle’s Rock','Flaring Phoenix','Flowing Springs','Goldarm Gulch','New Horizons','Out in the Open'],'Bounty':['Dry Season','Hideout','Layer Cake','Shooting Star'],'Gem Grab':['Double Swoosh','Gem Fort','Hard Rock Mine','Undermine'],'Brawl Ball':['Beach Ball','Center Stage','Pinball Dreams','Sneaky Fields','Spiraling Out','Triple Dribble'],'Hot Zone':['Dueling Beetles','Open Business','Parallel Plays','Ring of Fire'],'Heist':['Bridge Too Far','Hot Potato','Kaboom Canyon']};
 const maps={'Flowing Springs':[2,0],'Out in the Open':[2,0],'New Horizons':[2,0],'Shooting Star':[2,0],'Bridge Too Far':[2,0],'Dry Season':[2,0],'Belle’s Rock':[2,1],'Goldarm Gulch':[1,2],'Hard Rock Mine':[1,1],'Double Swoosh':[1,1],'Gem Fort':[0,2],'Pinball Dreams':[0,2],'Sneaky Fields':[1,2],'Hot Potato':[0,2],'Kaboom Canyon':[0,2],'Parallel Plays':[0,2]};
-// Hand-reviewed Hard Rock Mine geometry. Other maps retain provisional profiles.
-const terrainProfiles={'Hard Rock Mine':{bush:2,wall:2,midOpen:2,choke:2,flank:2,objective:'gem',confidence:'reviewed'}};
+// Terrain estimates for every selectable map; only Hard Rock Mine is individually reviewed.
+const terrainProfiles={
+  "Belle’s Rock":{bush:0,wall:2,midOpen:2,choke:2,flank:1,objective:"",confidence:"estimated"},
+  "Flaring Phoenix":{bush:1,wall:2,midOpen:1,choke:2,flank:2,objective:"",confidence:"estimated"},
+  "Flowing Springs":{bush:0,wall:0,midOpen:2,choke:0,flank:0,objective:"",confidence:"estimated"},
+  "Goldarm Gulch":{bush:1,wall:2,midOpen:1,choke:2,flank:2,objective:"",confidence:"estimated"},
+  "New Horizons":{bush:0,wall:0,midOpen:2,choke:0,flank:1,objective:"",confidence:"estimated"},
+  "Out in the Open":{bush:0,wall:0,midOpen:2,choke:0,flank:0,objective:"",confidence:"estimated"},
+  "Dry Season":{bush:0,wall:0,midOpen:2,choke:0,flank:1,objective:"",confidence:"estimated"},
+  "Hideout":{bush:2,wall:2,midOpen:1,choke:2,flank:2,objective:"",confidence:"estimated"},
+  "Layer Cake":{bush:1,wall:2,midOpen:1,choke:2,flank:1,objective:"",confidence:"estimated"},
+  "Shooting Star":{bush:0,wall:0,midOpen:2,choke:0,flank:0,objective:"",confidence:"estimated"},
+  "Double Swoosh":{bush:2,wall:1,midOpen:1,choke:2,flank:2,objective:"",confidence:"estimated"},
+  "Gem Fort":{bush:1,wall:2,midOpen:1,choke:2,flank:1,objective:"",confidence:"estimated"},
+  "Hard Rock Mine":{bush:2,wall:2,midOpen:2,choke:2,flank:2,objective:"",confidence:"reviewed"},
+  "Undermine":{bush:1,wall:2,midOpen:2,choke:2,flank:2,objective:"",confidence:"estimated"},
+  "Beach Ball":{bush:1,wall:1,midOpen:2,choke:1,flank:2,objective:"",confidence:"estimated"},
+  "Center Stage":{bush:2,wall:2,midOpen:1,choke:2,flank:2,objective:"",confidence:"estimated"},
+  "Pinball Dreams":{bush:1,wall:2,midOpen:1,choke:2,flank:2,objective:"",confidence:"estimated"},
+  "Sneaky Fields":{bush:2,wall:1,midOpen:0,choke:2,flank:2,objective:"",confidence:"estimated"},
+  "Spiraling Out":{bush:1,wall:2,midOpen:1,choke:2,flank:2,objective:"",confidence:"estimated"},
+  "Triple Dribble":{bush:1,wall:2,midOpen:1,choke:2,flank:2,objective:"",confidence:"estimated"},
+  "Dueling Beetles":{bush:1,wall:2,midOpen:1,choke:2,flank:1,objective:"",confidence:"estimated"},
+  "Open Business":{bush:0,wall:1,midOpen:2,choke:1,flank:1,objective:"",confidence:"estimated"},
+  "Parallel Plays":{bush:1,wall:2,midOpen:1,choke:2,flank:2,objective:"",confidence:"estimated"},
+  "Ring of Fire":{bush:1,wall:1,midOpen:2,choke:1,flank:1,objective:"",confidence:"estimated"},
+  "Bridge Too Far":{bush:0,wall:0,midOpen:2,choke:0,flank:0,objective:"",confidence:"estimated"},
+  "Hot Potato":{bush:1,wall:2,midOpen:1,choke:2,flank:2,objective:"",confidence:"estimated"},
+  "Kaboom Canyon":{bush:0,wall:2,midOpen:2,choke:1,flank:1,objective:"",confidence:"estimated"}
+};
 const mapSpecialists={'Hard Rock Mine':{Rico:17,Bo:12,Gale:9,Gene:10,Sprout:11,Squeak:9,Jessie:7,Mr_P:7,Shade:8,Emz:5,Tick:4,Dynamike:6,Poco:5,Max:4}};
 const bushChecks=new Set(['Bo','Gale','Emz','Squeak','Jessie','Rico','Griff','Lumi','Poco']);
 const wallUsers=new Set(['Rico','Sprout','Dynamike','Tick','Willow','Hank']);
@@ -30,6 +58,8 @@ function picks(prefix,count){return Array.from({length:count},(_,i)=>$(prefix+(i
 function evaluate(n){let [range,entry,superAccess,frag]=stats(n),r=role(n),map=$('map').value,known=!!maps[map],[open,cover]=maps[map]||[1,1],allies=picks('ally',2),enemies=picks('enemy',3),unknown=3-enemies.length;let score=58,risks=[],strengths=[];
 const geo=terrainProfiles[map];
 if(geo){
+  if(geo.midOpen===2){if(range===2)score+=8;else if(range===0){score-=12;risks.push('Exposed central sightlines')}}
+  if(geo.bush===2&&range===0&&geo.flank===0){score-=9;risks.push('Limited covered approach')}
   if(wallUsers.has(n)){score+=geo.wall*5;strengths.push('Uses walls and cover')}
   if(bushChecks.has(n)){score+=geo.bush*5;strengths.push('Checks or controls bushes')}
   if(flankUsers.has(n)){score+=geo.flank*3;strengths.push('Side-lane approach available')}
@@ -59,7 +89,7 @@ let fatal=open===2&&cover===0&&range===0&&entry<=1;if(fatal){score-=22;risks.uns
 let safe=score>=40&&!fatal&&(range>0||open===0);return {n,r,score:Math.round(Math.max(0,Math.min(95,score))),safe,risks:[...new Set(risks)].slice(0,2),strengths,known};
 }
 function card(x){return '<div class="result"><span class="score">'+x.score+'/95</span><strong>'+x.n+'</strong><div class="small">'+x.r.toUpperCase()+' · estimated draft fit</div><div class="small">'+(x.strengths.join(' · ')||'Situational option')+'</div>'+(x.risks.length?'<div class="warning">⚠ '+x.risks.join(' · ')+'</div>':'')+'</div>'}
-function render(){let map=$('map').value;if(!map){$('safe').textContent='Select a map';$('risky').textContent='';return}let [o,c]=maps[map]||[1,1];$('terrain').textContent=terrainProfiles[map]?'Reviewed terrain: open gem mine; dense side bushes; central wall pockets; narrow choke points. Scores consider bush checks, flanks, wall use and mid control.':maps[map]?'Estimated map profile: '+['closed','mixed','open'][o]+' sightlines; '+['limited','mixed','ample'][c]+' cover (not geometry-reviewed).':'No reliable map profile: neutral terrain assumptions. Results less certain.';let taken=[...picks('ally',2),...picks('enemy',3)];let ranked=READY.filter(n=>!taken.includes(n)).map(evaluate).sort((a,b)=>b.score-a.score);let safe=ranked.filter(x=>x.safe).slice(0,3);let risky=ranked.filter(x=>!safe.includes(x)&&(['assassin','artillery','tank'].includes(x.r)||x.risks.length)).slice(0,2);$('safe').innerHTML=safe.map(card).join('')||'<p class="warning">No reliably safe picks identified; do not force a pick.</p>';$('risky').innerHTML=risky.map(card).join('')||'<p class="small">No clear high-risk alternatives.</p>'}
+function render(){let map=$('map').value;if(!map){$('safe').textContent='Select a map';$('risky').textContent='';return}let [o,c]=maps[map]||[1,1];$('terrain').textContent=terrainProfiles[map]?(terrainProfiles[map].confidence==='reviewed'?'Reviewed':'Estimated')+' terrain: '+['few','some','dense'][terrainProfiles[map].bush]+' bushes; '+['few','some','many'][terrainProfiles[map].wall]+' walls; '+['closed','mixed','open'][terrainProfiles[map].midOpen]+' central sightlines; '+['few','some','many'][terrainProfiles[map].choke]+' choke points; '+['limited','some','multiple'][terrainProfiles[map].flank]+' flank routes. '+(terrainProfiles[map].confidence==='reviewed'?'':'Approximate profile; not a tile-by-tile map audit.'):maps[map]?'Estimated map profile: '+['closed','mixed','open'][o]+' sightlines; '+['limited','mixed','ample'][c]+' cover (not geometry-reviewed).':'No reliable map profile: neutral terrain assumptions. Results less certain.';let taken=[...picks('ally',2),...picks('enemy',3)];let ranked=READY.filter(n=>!taken.includes(n)).map(evaluate).sort((a,b)=>b.score-a.score);let safe=ranked.filter(x=>x.safe).slice(0,3);let risky=ranked.filter(x=>!safe.includes(x)&&(['assassin','artillery','tank'].includes(x.r)||x.risks.length)).slice(0,2);$('safe').innerHTML=safe.map(card).join('')||'<p class="warning">No reliably safe picks identified; do not force a pick.</p>';$('risky').innerHTML=risky.map(card).join('')||'<p class="small">No clear high-risk alternatives.</p>'}
 Object.keys(modes).forEach(m=>$('mode').add(new Option(m,m)));$('mode').value='Knockout';$('mode').onchange=()=>{$('mapSearch').value='';fillMaps()};$('mapSearch').oninput=fillMaps;$('map').onchange=render;
 for(let i=1;i<=6;i++){let b=document.createElement('button');b.textContent=i;b.onclick=()=>{position=i;document.querySelectorAll('.positions button').forEach((v,j)=>v.classList.toggle('on',j+1===i));render()};if(i===position)b.className='on';$('positions').append(b)}
 for(let p of ['ally1','ally2','enemy1','enemy2','enemy3']){selectOptions(p,FULL_ROSTER);$(p).onchange=render}
