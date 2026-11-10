@@ -11,6 +11,12 @@
 const READY='Bo,Bolt,Carl,Clancy,Colt,Damian,Doug,Dynamike,Edgar,El Primo,Emz,Fang,Frank,Gale,Gene,Gigi,Glowy,Griff,Hank,Jessie,Kenji,Kit,Lumi,Mandy,Max,Mico,Mina,Mr. P,Nani,Nita,Poco,Rico,Shade,Sirius,Sprout,Squeak,Starr Nova,Tick,Wendy,Willow,Ziggy,Draco,Cosmo'.split(',');
 const modes={'Knockout':['Belle’s Rock','Flaring Phoenix','Flowing Springs','Goldarm Gulch','New Horizons','Out in the Open'],'Bounty':['Dry Season','Hideout','Layer Cake','Shooting Star'],'Gem Grab':['Double Swoosh','Gem Fort','Hard Rock Mine','Undermine'],'Brawl Ball':['Beach Ball','Center Stage','Pinball Dreams','Sneaky Fields','Spiraling Out','Triple Dribble'],'Hot Zone':['Dueling Beetles','Open Business','Parallel Plays','Ring of Fire'],'Heist':['Bridge Too Far','Hot Potato','Kaboom Canyon']};
 const maps={'Flowing Springs':[2,0],'Out in the Open':[2,0],'New Horizons':[2,0],'Shooting Star':[2,0],'Bridge Too Far':[2,0],'Dry Season':[2,0],'Belle’s Rock':[2,1],'Goldarm Gulch':[1,2],'Hard Rock Mine':[1,1],'Double Swoosh':[1,1],'Gem Fort':[0,2],'Pinball Dreams':[0,2],'Sneaky Fields':[1,2],'Hot Potato':[0,2],'Kaboom Canyon':[0,2],'Parallel Plays':[0,2]};
+// Hand-reviewed Hard Rock Mine geometry. Other maps retain provisional profiles.
+const terrainProfiles={'Hard Rock Mine':{bush:2,wall:2,midOpen:2,choke:2,flank:2,objective:'gem',confidence:'reviewed'}};
+const mapSpecialists={'Hard Rock Mine':{Rico:17,Bo:12,Gale:9,Gene:10,Sprout:11,Squeak:9,Jessie:7,Mr_P:7,Shade:8,Emz:5,Tick:4,Dynamike:6,Poco:5,Max:4}};
+const bushChecks=new Set(['Bo','Gale','Emz','Squeak','Jessie','Rico','Griff','Lumi','Poco']);
+const wallUsers=new Set(['Rico','Sprout','Dynamike','Tick','Willow','Hank']);
+const flankUsers=new Set(['Shade','Fang','Kenji','Edgar','Gigi','Mico','Carl','Max']);
 const groups={marksman:'Mandy,Nani,Wendy',artillery:'Tick,Dynamike,Sprout,Willow',tank:'Bolt,El Primo,Frank,Hank,Draco,Doug',assassin:'Edgar,Fang,Kenji,Mico,Shade,Kit,Gigi',support:'Poco,Max,Glowy',controller:'Gene,Gale,Bo,Emz,Jessie,Mr. P,Squeak,Ziggy,Sirius,Starr Nova',damage:'Colt,Rico,Griff,Clancy,Carl,Nita,Mina,Cosmo,Damian,Lumi'};
 const roles={};Object.entries(groups).forEach(([role,names])=>names.split(',').forEach(n=>roles[n]=role));
 const defaults={marksman:[2,2,2,1],artillery:[2,1,1,2],tank:[0,1,1,1],assassin:[0,1,1,2],support:[1,2,2,1],controller:[1,2,2,1],damage:[1,2,2,1]};
@@ -22,6 +28,20 @@ function selectOptions(id,names){let prev=$(id).value;$(id).replaceChildren(new 
 function fillMaps(){let old=$('map').value,q=$('mapSearch').value.toLowerCase();let a=modes[$('mode').value].filter(n=>n.toLowerCase().includes(q)).sort((x,y)=>x.localeCompare(y));$('map').innerHTML=a.map(n=>'<option>'+n+'</option>').join('');if(a.includes(old))$('map').value=old;render()}
 function picks(prefix,count){return Array.from({length:count},(_,i)=>$(prefix+(i+1)).value).filter(Boolean)}
 function evaluate(n){let [range,entry,superAccess,frag]=stats(n),r=role(n),map=$('map').value,known=!!maps[map],[open,cover]=maps[map]||[1,1],allies=picks('ally',2),enemies=picks('enemy',3),unknown=3-enemies.length;let score=58,risks=[],strengths=[];
+const geo=terrainProfiles[map];
+if(geo){
+  if(wallUsers.has(n)){score+=geo.wall*5;strengths.push('Uses walls and cover')}
+  if(bushChecks.has(n)){score+=geo.bush*5;strengths.push('Checks or controls bushes')}
+  if(flankUsers.has(n)){score+=geo.flank*3;strengths.push('Side-lane approach available')}
+  if(r==='marksman'){score+=geo.midOpen*3;score-=geo.bush*5;risks.push('Bush ambush risk outside mid')}
+  if(r==='artillery'){score+=geo.choke*4;risks.push('Vulnerable if side bushes are lost')}
+  if(r==='tank'&&!bushChecks.has(n)){score+=geo.flank*2;risks.push('Must approach through covered lanes')}
+  if(r==='controller'){score+=geo.choke*3;strengths.push('Controls mine entrances')}
+  score+=(mapSpecialists[map]||{})[n.replaceAll(' ','_')]||0;
+  if(enemies.some(e=>flankUsers.has(e))&&(r==='marksman'||r==='artillery')){score-=12;risks.push('Enemy flanker can bypass mid cover')}
+  if(enemies.some(e=>wallUsers.has(e))&&r==='marksman'){score-=6;risks.push('Enemy can pressure behind walls')}
+  if(enemies.some(e=>bushChecks.has(e))&&flankUsers.has(n)){score-=7;risks.push('Enemy bush denial limits flanks')}
+}
 if(open===2){if(range===2){score+=18;strengths.push('Long-range pressure')}else if(range===0){score-=28;risks.push('Hard to reach enemies on open ground')}if(cover===0&&entry===0){score-=18;risks.push('Limited safe approach routes')}if(range===0&&superAccess===0){score-=15;risks.push('Unreliable Super access')}}
 if(open===0){if(r==='artillery'||r==='controller')score+=13;if(r==='tank')score+=9}
 if(cover===2&&r==='artillery')score+=8;
@@ -39,7 +59,7 @@ let fatal=open===2&&cover===0&&range===0&&entry<=1;if(fatal){score-=22;risks.uns
 let safe=score>=40&&!fatal&&(range>0||open===0);return {n,r,score:Math.round(Math.max(0,Math.min(95,score))),safe,risks:[...new Set(risks)].slice(0,2),strengths,known};
 }
 function card(x){return '<div class="result"><span class="score">'+x.score+'/95</span><strong>'+x.n+'</strong><div class="small">'+x.r.toUpperCase()+' · estimated draft fit</div><div class="small">'+(x.strengths.join(' · ')||'Situational option')+'</div>'+(x.risks.length?'<div class="warning">⚠ '+x.risks.join(' · ')+'</div>':'')+'</div>'}
-function render(){let map=$('map').value;if(!map){$('safe').textContent='Select a map';$('risky').textContent='';return}let [o,c]=maps[map]||[1,1];$('terrain').textContent=maps[map]?'Estimated map profile: '+['closed','mixed','open'][o]+' sightlines; '+['limited','mixed','ample'][c]+' cover.':'No reliable map profile: neutral terrain assumptions. Results less certain.';let taken=[...picks('ally',2),...picks('enemy',3)];let ranked=READY.filter(n=>!taken.includes(n)).map(evaluate).sort((a,b)=>b.score-a.score);let safe=ranked.filter(x=>x.safe).slice(0,3);let risky=ranked.filter(x=>!safe.includes(x)&&(['assassin','artillery','tank'].includes(x.r)||x.risks.length)).slice(0,2);$('safe').innerHTML=safe.map(card).join('')||'<p class="warning">No reliably safe picks identified; do not force a pick.</p>';$('risky').innerHTML=risky.map(card).join('')||'<p class="small">No clear high-risk alternatives.</p>'}
+function render(){let map=$('map').value;if(!map){$('safe').textContent='Select a map';$('risky').textContent='';return}let [o,c]=maps[map]||[1,1];$('terrain').textContent=terrainProfiles[map]?'Reviewed terrain: open gem mine; dense side bushes; central wall pockets; narrow choke points. Scores consider bush checks, flanks, wall use and mid control.':maps[map]?'Estimated map profile: '+['closed','mixed','open'][o]+' sightlines; '+['limited','mixed','ample'][c]+' cover (not geometry-reviewed).':'No reliable map profile: neutral terrain assumptions. Results less certain.';let taken=[...picks('ally',2),...picks('enemy',3)];let ranked=READY.filter(n=>!taken.includes(n)).map(evaluate).sort((a,b)=>b.score-a.score);let safe=ranked.filter(x=>x.safe).slice(0,3);let risky=ranked.filter(x=>!safe.includes(x)&&(['assassin','artillery','tank'].includes(x.r)||x.risks.length)).slice(0,2);$('safe').innerHTML=safe.map(card).join('')||'<p class="warning">No reliably safe picks identified; do not force a pick.</p>';$('risky').innerHTML=risky.map(card).join('')||'<p class="small">No clear high-risk alternatives.</p>'}
 Object.keys(modes).forEach(m=>$('mode').add(new Option(m,m)));$('mode').value='Knockout';$('mode').onchange=()=>{$('mapSearch').value='';fillMaps()};$('mapSearch').oninput=fillMaps;$('map').onchange=render;
 for(let i=1;i<=6;i++){let b=document.createElement('button');b.textContent=i;b.onclick=()=>{position=i;document.querySelectorAll('.positions button').forEach((v,j)=>v.classList.toggle('on',j+1===i));render()};if(i===position)b.className='on';$('positions').append(b)}
 for(let p of ['ally1','ally2','enemy1','enemy2','enemy3']){selectOptions(p,FULL_ROSTER);$(p).onchange=render}
